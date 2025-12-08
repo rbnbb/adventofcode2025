@@ -1,6 +1,7 @@
 using Base: code_typed_opaque_closure, return_types
 using DelimitedFiles
 using LinearAlgebra
+using SHA
 
 Point = Vector{Float64}
 
@@ -33,6 +34,8 @@ function find_closest_pairs(vs, norm_vs)
             idx = searchsortedfirst(closest_pairs, distance; by=first)
             insert!(closest_pairs, idx, (distance, u, v))
             if distance > norm_vs[j] + norm_vs[k]  # violates triangle inequality
+                # Surprisingly enough, this never shows nothing
+                @show "triangle"
                 break
             end
         end
@@ -45,30 +48,22 @@ function prod_three_largest_circuits(closest_points, nconnections)
     j = 1
     while j <= nconnections
         _, p1, p2 = closest_points[j]
-        println("Joining $j closest: $p1 & $p2 ...")
+        # println("Joining $j closest: $p1 & $p2 ...")
         in_existing_circ = false
-        for circ in circuits
-            if p1 in circ || p2 in circ
-                if p1 in circ && p2 in circ
-                    @show nconnections
-                    nconnections += 1
-                    @show nconnections
-                    println("ALEADY existing, NOTHING happens")
-                else
-                    push!(circ, p1, p2)
-                    println("Added to existing circuit $circ")
-                end
-                in_existing_circ = true
-                break
-            end
-        end
-        if !in_existing_circ
-            # new circuit
-            println("New circuit!")
+        c1 = findfirst(c -> p1 in c, circuits)
+        c2 = findfirst(c -> p2 in c, circuits)
+        if isnothing(c1) && isnothing(c2)
             push!(circuits, Set([p1, p2]))
+        elseif isnothing(c1) && !isnothing(c2)
+            push!(circuits[c2], p1)
+        elseif !isnothing(c1) && isnothing(c2)
+            push!(circuits[c1], p2)
+        elseif c1 != c2
+            circuits[c1] = union(circuits[c1], circuits[c2])
+            popat!(circuits, c2)
         end
-        println()
-        @show length.(circuits)
+        # @warn "" circuits 
+        # @warn "" [ round(Int, sum(circ)) for circ in circuits]
         j += 1
     end
     lens = length.(circuits)
@@ -76,6 +71,35 @@ function prod_three_largest_circuits(closest_points, nconnections)
     lens = lens[order]
     @show lens
     return prod(lens[1:3])
+end
+
+function part_2(closest_points, npoints)
+    circuits = Set{}[]
+    j = 1
+    while true
+        _, p1, p2 = closest_points[j]
+        # println("Joining $j closest: $p1 & $p2 ...")
+        in_existing_circ = false
+        c1 = findfirst(c -> p1 in c, circuits)
+        c2 = findfirst(c -> p2 in c, circuits)
+        if isnothing(c1) && isnothing(c2)
+            push!(circuits, Set([p1, p2]))
+        elseif isnothing(c1) && !isnothing(c2)
+            push!(circuits[c2], p1)
+        elseif !isnothing(c1) && isnothing(c2)
+            push!(circuits[c1], p2)
+        elseif c1 != c2
+            circuits[c1] = union(circuits[c1], circuits[c2])
+            popat!(circuits, c2)
+        end
+        if length(circuits) == 1 && length(circuits[1]) == npoints
+            return p2[1] * p1[1]
+            break
+        end
+        @show length(circuits)
+        j += 1
+    end
+    return nothing
 end
 
 function main(args=ARGS)
